@@ -1,16 +1,14 @@
 #include "DeathRow.h"
 
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
 struct _deathrow
 {
 	deathrow base;
-	void(*deepfree)(void*);
+	void(*deepfree)(/*@only@*/void*);
 };
-
-static void _DRDestroyElement(deathrow*const element)
-{
-	((struct _deathrow*)element)->deepfree(element->datap);
-	free(element);
-}
 
 void DRfor(deathrow*const row,void(*callback)(deathrow*const))
 {
@@ -20,26 +18,35 @@ void DRfor(deathrow*const row,void(*callback)(deathrow*const))
 
 void DRDestroy(deathrow*const head)
 {
-	if(!head)return;
+	if(!head){return;}
+	// move towards the end first
 	DRDestroy(head->next);
-	_DRDestroyElement(head);
+	// clear the deep data
+	((struct _deathrow*)head)->deepfree(head->datap);
+	// clear the last element.
+	free(head);
+	//return up the recursion to the next last element on this queue
 }
 
 /*@null@*/
-static deathrow*_DRelement(void*const e,/*@null@*/deathrow*const n,unsigned int const space,void(*deepfree)(void*))
+/*@only@*/
+static deathrow*_DRelement(void*const e,/*@only@*//*@null@*/deathrow*const oldhead,unsigned int const space,void(*deepfree)(/*@only@*/void*))
 {
-	struct _deathrow a={
-		.base={
-			.datap=e,
-			.next=n,
-			.space=space?space-1:0,
-		},
-		.deepfree=deepfree,
-	},*p=malloc(sizeof*p);
-	if(!p)
-		return n;
-	memcpy(p,&a,sizeof*p);
-	return (deathrow*)p;
+	if(!e)return NULL;
+	if(!!oldhead){assert(e!=oldhead);}
+	{
+		struct _deathrow a={
+			.base={
+				.datap=e,
+				.next=oldhead,
+				.space=space!=0?space-1:0,
+			},
+			.deepfree=deepfree,
+		},*p=malloc(sizeof*p);
+		if(!p)return oldhead;
+		memcpy(p,&a,sizeof*p);
+		return (deathrow*)p;
+	}
 }
 
 deathrow*DRelement(void*const datapointer,unsigned int const space,void(*deepfree)(void*))
@@ -48,6 +55,7 @@ deathrow*DRelement(void*const datapointer,unsigned int const space,void(*deepfre
 }
 
 /*@null@*/
+/*@dependent@*/
 static deathrow*_ale(/*@null@*/deathrow*const r)
 {
 	// return the next-to-last element or r itself.
@@ -56,11 +64,12 @@ static deathrow*_ale(/*@null@*/deathrow*const r)
 
 deathrow*DRadd(deathrow*q,void*const e)
 {
+	deathrow*ret;
 	// cannot add to nonthing and cannot add nothing.
 	if(!q||!e) return NULL;
+	assert(q!=e);
 	{
-
-		void(*df)(void*)=((struct _deathrow*)q)->deepfree;
+		void(*df)(/*@only@*/void*)=((struct _deathrow*)q)->deepfree;
 	
 		// no space left?
 		if(q->space==0)
@@ -76,7 +85,8 @@ deathrow*DRadd(deathrow*q,void*const e)
 				
 			*/
 	
-			// q :. le, no need to check for null dereferences here.
+			// q :. le
+			assert(le);
 			// is last element?
 			if(!le->next)
 			{
@@ -96,11 +106,11 @@ deathrow*DRadd(deathrow*q,void*const e)
 			}
 		}
 
-		q=_DRelement(e,q,!!q?q->space:0,df);
+		ret=_DRelement(e,q,!!q?q->space:0,df);
 	}
 	// Disallow inserting
-	if(!!q&&!!q->next)q->next->space=0;
-	return q;
+	if(!!ret&&!!ret->next)ret->next->space=0;
+	return ret;
 }
 
 int DRcount(deathrow const*const row)
