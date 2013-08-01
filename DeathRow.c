@@ -81,7 +81,7 @@ deathrow*DRadd(deathrow*q,void*const e)
 			if(!le->next)
 			{
 				// remove the last element
-				DRDestroy(le);
+				DRDestroy(q);
 				// has no reference other than q;
 				q=NULL;
 	
