@@ -18,7 +18,7 @@ typedef struct Deathrow
 void DRDestroy(deathrow*const);
 
 /*@null@*/
-deathrow*DRelement(void*const,unsigned int const);
+deathrow*DRelement(void*const,unsigned int const,void(*)(void*));
 /*@null@*/
 deathrow*DRadd(deathrow*const,void*const);
 
