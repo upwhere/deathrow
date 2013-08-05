@@ -1,17 +1,14 @@
 #include "DeathRow.h"
 
-static void _DRDestroyElement(deathrow*const element)
-{
-	free(element->datap);
-	free(element);
-}
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
 
-static void _DRDestroyRow(deathrow*const element)
+struct _deathrow
 {
-	if(!element)return;
-	_DRDestroyRow(element->next);
-	_DRDestroyElement(element);
-}
+	deathrow base;
+	void(*deepfree)(/*@only@*/void*);
+};
 
 void DRfor(deathrow*const row,void(*callback)(deathrow*const))
 {
@@ -19,31 +16,46 @@ void DRfor(deathrow*const row,void(*callback)(deathrow*const))
 	callback(row->datap);
 }
 
-void DRDestroy(deathrow*const row)
+void DRDestroy(deathrow*const head)
 {
-	_DRDestroyRow(row);
+	if(!head){return;}
+	// move towards the end first
+	DRDestroy(head->next);
+	// clear the deep data
+	((struct _deathrow*)head)->deepfree(head->datap);
+	// clear the last element.
+	free(head);
+	//return up the recursion to the next last element on this queue
 }
 
 /*@null@*/
-static deathrow*_DRelement(void*const e,/*@null@*/deathrow*const n,unsigned int const space)
+/*@only@*/
+static deathrow*_DRelement(void*const e,/*@only@*//*@null@*/deathrow*const oldhead,unsigned int const space,void(*deepfree)(/*@only@*/void*))
 {
-	deathrow a={
-		.datap=e,
-		.next=n,
-		.space=space?space-1:0,
-	},*p=malloc(sizeof*p);
-	if(!p)
-		return n;
-	memcpy(p,&a,sizeof*p);
-	return p;
+	if(!e)return NULL;
+	if(!!oldhead){assert(e!=oldhead);}
+	{
+		struct _deathrow a={
+			.base={
+				.datap=e,
+				.next=oldhead,
+				.space=space!=0?space-1:0,
+			},
+			.deepfree=deepfree,
+		},*p=malloc(sizeof*p);
+		if(!p)return oldhead;
+		memcpy(p,&a,sizeof*p);
+		return (deathrow*)p;
+	}
 }
 
-deathrow*DRelement(void*const datapointer,unsigned int const space)
+deathrow*DRelement(void*const datapointer,unsigned int const space,void(*deepfree)(void*))
 {
-	return _DRelement(datapointer,NULL,space);
+	return _DRelement(datapointer,NULL,space,deepfree);
 }
 
 /*@null@*/
+/*@dependent@*/
 static deathrow*_ale(/*@null@*/deathrow*const r)
 {
 	// return the next-to-last element or r itself.
@@ -52,46 +64,53 @@ static deathrow*_ale(/*@null@*/deathrow*const r)
 
 deathrow*DRadd(deathrow*q,void*const e)
 {
+	deathrow*ret;
 	// cannot add to nonthing and cannot add nothing.
 	if(!q||!e) return NULL;
-
-	// no space left?
-	if(q->space==0)
+	assert(q!=e);
 	{
-		deathrow*const le=_ale(q);
-
-		/*
-			if the list was  0 elements in length, q was null (hopefully)
-			if the list was  1 element  in length, ale returend q, and q/le should be freed.
-			if the list was  2 elements in length, ale returned q, and q->next/le->next should be freed.
-			if the list was  3 elements in length, ale returned q->next, and le->next. should be freed.
-			if the list was >3 elements in length, ale returned q->...->next and le->next should be freed.
-		
-		*/
-
-		// q :. le, no need to check for null dereferences here.
-		// is last element?
-		if(!(le)->next)
+		void(*df)(/*@only@*/void*)=((struct _deathrow*)q)->deepfree;
+	
+		// no space left?
+		if(q->space==0)
 		{
-			// remove the last element
-			DRDestroy(le);
-			// has no reference other than q;
-			q=NULL;
+			deathrow*const le=_ale(q);
+	
+			/*
+				if the list was  0 elements in length, q was null (hopefully)
+				if the list was  1 element  in length, ale returend q, and q/le should be freed.
+				if the list was  2 elements in length, ale returned q, and q->next/le->next should be freed.
+				if the list was  3 elements in length, ale returned q->next, and le->next. should be freed.
+				if the list was >3 elements in length, ale returned q->...->next and le->next should be freed.
+				
+			*/
+	
+			// q :. le
+			assert(le);
+			// is last element?
+			if(!le->next)
+			{
+				// remove the last element
+				DRDestroy(q);
+				// has no reference other than q;
+				q=NULL;
+	
+			}
+			// q :. le + ! le->next :. le->next->next + ! le->next->next->next
+			else
+			{
+				// remove the last element
+				DRDestroy(le->next);
+				// remove its reference
+				le->next=NULL;
+			}
 		}
-		// q :. le + ! le->next :. le->next->next + ! le->next->next->next
-		else
-		{
-			// remove the last element
-			DRDestroy((le)->next);
-			// remove its reference
-			(le)->next=NULL;
-		}
+
+		ret=_DRelement(e,q,!!q?q->space:0,df);
 	}
-
-	q=_DRelement(e,q,(!!q&&(q->space>0))?q->space:0);
 	// Disallow inserting
-	if(q&&q->next)q->next->space=0;
-	return q;
+	if(!!ret&&!!ret->next)ret->next->space=0;
+	return ret;
 }
 
 int DRcount(deathrow const*const row)
