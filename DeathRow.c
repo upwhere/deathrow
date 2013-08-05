@@ -8,6 +8,7 @@ struct _deathrow
 {
 	deathrow base;
 	void(*deepfree)(/*@only@*/void*);
+	deathrow*prev;
 };
 
 void DRfor(deathrow*const row,void(*callback)(deathrow*const))
@@ -42,9 +43,11 @@ static deathrow*_DRelement(void*const e,/*@only@*//*@null@*/deathrow*const oldhe
 				.space=space!=0?space-1:0,
 			},
 			.deepfree=deepfree,
+			.prev=NULL,
 		},*p=malloc(sizeof*p);
 		if(!p)return oldhead;
 		memcpy(p,&a,sizeof*p);
+		((struct _deathrow*)oldhead)->prev=(deathrow*)p;
 		return (deathrow*)p;
 	}
 }
