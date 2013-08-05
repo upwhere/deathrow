@@ -1,9 +1,6 @@
 #ifndef DeathRow_H
 #define DeathRow_H
 
-#include <stdlib.h>
-#include <string.h>
-
 typedef struct Deathrow
 {
 	void*
@@ -15,17 +12,20 @@ typedef struct Deathrow
 
 /*@-exportlocal@*/
 
-void DRDestroy(deathrow*const);
+void DRDestroy(/*@only@*/deathrow*const);
 
 /*@null@*/
-deathrow*DRelement(void*const,unsigned int const);
-/*@null@*/
-deathrow*DRadd(deathrow*const,void*const);
+/*@only@*/
+deathrow*DRelement(void*const,unsigned int const,void(*)(/*@only@*/void*));
 
-void DRfor(deathrow*const,void(*)(deathrow*const));
+/*@null@*/
+/*@only@*/
+deathrow*DRadd(/*@only@*/deathrow*const,/*@keep@*/void*const);
+
+void DRfor(/*@temp@*/deathrow*const,void(*)(deathrow*const));
 //void DRfor(deathrow*const,void(*)(deathrow*const),void*);
 
-int DRcount(deathrow const*const);
+int DRcount(/*@temp@*/deathrow const*const);
 
 /*@+exportlocal@*/
 #endif
